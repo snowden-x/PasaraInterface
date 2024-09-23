@@ -4,127 +4,129 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { useMenu, MenuItemOption } from './MenuProvider';
+import { useCart } from './CartProvider';
 
 interface MenuItem {
-  id: number;
-  name: string;
-  description: string;
-  image: string;
-  price: number;
-  category: string;
-  defaultOptions: MenuItemOption;
-  availableOptions: {
-    sizes: string[];
-    proteins: string[];
-    sides: string[];
-    addons: string[];
-  };
+    id: number;
+    name: string;
+    description: string;
+    image: string;
+    price: number;
+    category: string;
+    customizations: Record<string, {
+        default: string | null;
+        options: Array<{ name: string; price_adjustment: number }>;
+    }>;
+    is_available: boolean;
 }
 
 interface CustomizeOrderProps {
-  item: MenuItem;
-  onClose: () => void;
+    item: MenuItem;
+    onClose: () => void;
 }
 
 const CustomizeOrder: React.FC<CustomizeOrderProps> = ({ item, onClose }) => {
-  const { addToCart } = useMenu();
-  const [selectedSize, setSelectedSize] = useState<string>(item.defaultOptions.size);
-  const [selectedProtein, setSelectedProtein] = useState<string>(item.defaultOptions.protein);
-  const [selectedSides, setSelectedSides] = useState<string[]>(item.defaultOptions.sides);
-  const [selectedAddons, setSelectedAddons] = useState<string[]>(item.defaultOptions.addons);
-  const [specialInstructions, setSpecialInstructions] = useState<string>('');
+    const { addToCart } = useCart();
+    const [selectedOptions, setSelectedOptions] = useState<Record<string, string | string[]>>({});
+    const [specialInstructions, setSpecialInstructions] = useState<string>('');
 
-  const handleSideChange = (side: string) => {
-    setSelectedSides(prev =>
-      prev.includes(side) ? prev.filter(s => s !== side) : [...prev, side]
-    );
-  };
-
-  const handleAddonChange = (addon: string) => {
-    setSelectedAddons(prev =>
-      prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon]
-    );
-  };
-
-  const handleAddToCart = () => {
-    const customizations = {
-      size: selectedSize,
-      protein: selectedProtein,
-      sides: selectedSides,
-      addons: selectedAddons,
-      specialInstructions,
+    const handleOptionChange = (category: string, value: string) => {
+        setSelectedOptions(prev => ({ ...prev, [category]: value }));
     };
-    addToCart(item, customizations);
-    onClose();
-  };
 
-  return (
-    <div className="space-y-4 mt-4">
-      <div>
-        <Button onClick={handleAddToCart} className="w-full">
-          Add to Cart
-        </Button>
-      </div>
-      <div>
-        <Label>Size</Label>
-        <RadioGroup value={selectedSize} onValueChange={setSelectedSize}>
-          {item.availableOptions.sizes.map((size) => (
-            <div key={size} className="flex items-center space-x-2">
-              <RadioGroupItem value={size} id={`size-${size}`} />
-              <Label htmlFor={`size-${size}`}>{size}</Label>
+    const handleMultiOptionChange = (category: string, value: string) => {
+        setSelectedOptions(prev => {
+            const currentValues = (prev[category] as string[]) || [];
+            return {
+                ...prev,
+                [category]: currentValues.includes(value)
+                    ? currentValues.filter(v => v !== value)
+                    : [...currentValues, value]
+            };
+        });
+    };
+
+    const handleAddToCart = () => {
+        const customizations = Object.entries(item.customizations).flatMap(([category, customization]) => {
+            const selectedValue = selectedOptions[category];
+            if (Array.isArray(selectedValue)) {
+                return selectedValue.map(option => ({
+                    category,
+                    option_id: option,
+                }));
+            } else if (selectedValue) {
+                return [{
+                    category,
+                    option_id: selectedValue,
+                }];
+            }
+            return [];
+        });
+
+        if (specialInstructions) {
+            customizations.push({
+                category: 'Special Instructions',
+                option_id: specialInstructions,
+            });
+        }
+
+        addToCart(item.id, 1, customizations);
+        onClose();
+    };
+
+    return (
+        <div className="space-y-4 mt-4">
+            <div>
+                <Button onClick={handleAddToCart} className="w-full">
+                    Add to Cart
+                </Button>
             </div>
-          ))}
-        </RadioGroup>
-      </div>
-      <div>
-        <Label>Protein</Label>
-        <RadioGroup value={selectedProtein} onValueChange={setSelectedProtein}>
-          {item.availableOptions.proteins.map((protein) => (
-            <div key={protein} className="flex items-center space-x-2">
-              <RadioGroupItem value={protein} id={`protein-${protein}`} />
-              <Label htmlFor={`protein-${protein}`}>{protein}</Label>
+            {Object.entries(item.customizations).map(([category, customization]) => (
+                <div key={category}>
+                    <Label>{category}</Label>
+                    {customization.options.length > 1 ? (
+                        <RadioGroup
+                            value={selectedOptions[category] as string || customization.default || ''}
+                            onValueChange={(value) => handleOptionChange(category, value)}
+                        >
+                            {customization.options.map((option) => (
+                                <div key={option.name} className="flex items-center space-x-2">
+                                    <RadioGroupItem value={option.name} id={`${category}-${option.name}`} />
+                                    <Label htmlFor={`${category}-${option.name}`}>
+                                        {option.name}
+                                        {option.price_adjustment > 0 && ` (+$${option.price_adjustment.toFixed(2)})`}
+                                    </Label>
+                                </div>
+                            ))}
+                        </RadioGroup>
+                    ) : (
+                        customization.options.map((option) => (
+                            <div key={option.name} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`${category}-${option.name}`}
+                                    checked={(selectedOptions[category] as string[])?.includes(option.name)}
+                                    onCheckedChange={() => handleMultiOptionChange(category, option.name)}
+                                />
+                                <Label htmlFor={`${category}-${option.name}`}>
+                                    {option.name}
+                                    {option.price_adjustment > 0 && ` (+$${option.price_adjustment.toFixed(2)})`}
+                                </Label>
+                            </div>
+                        ))
+                    )}
+                </div>
+            ))}
+            <div>
+                <Label htmlFor="specialInstructions">Special Instructions</Label>
+                <Textarea
+                    id="specialInstructions"
+                    value={specialInstructions}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSpecialInstructions(e.target.value)}
+                    placeholder="Any special requests?"
+                />
             </div>
-          ))}
-        </RadioGroup>
-      </div>
-      <div>
-        <Label>Sides</Label>
-        {item.availableOptions.sides.map((side) => (
-          <div key={side} className="flex items-center space-x-2">
-            <Checkbox
-              id={`side-${side}`}
-              checked={selectedSides.includes(side)}
-              onCheckedChange={() => handleSideChange(side)}
-            />
-            <Label htmlFor={`side-${side}`}>{side}</Label>
-          </div>
-        ))}
-      </div>
-      <div>
-        <Label>Add-ons</Label>
-        {item.availableOptions.addons.map((addon) => (
-          <div key={addon} className="flex items-center space-x-2">
-            <Checkbox
-              id={`addon-${addon}`}
-              checked={selectedAddons.includes(addon)}
-              onCheckedChange={() => handleAddonChange(addon)}
-            />
-            <Label htmlFor={`addon-${addon}`}>{addon}</Label>
-          </div>
-        ))}
-      </div>
-      <div>
-        <Label htmlFor="specialInstructions">Special Instructions</Label>
-        <Textarea
-          id="specialInstructions"
-          value={specialInstructions}
-          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSpecialInstructions(e.target.value)}
-          placeholder="Any special requests?"
-        />
-      </div>
-    </div>
-  );
+        </div>
+    );
 };
 
 export default CustomizeOrder;

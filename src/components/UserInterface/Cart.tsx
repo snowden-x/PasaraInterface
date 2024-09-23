@@ -1,28 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ShoppingBag01Icon } from 'hugeicons-react';
 import { Badge } from "@/components/ui/badge";
-import { useMenu } from './MenuProvider';
+import { useCart, CartItem } from './CartProvider';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
-interface CartItem {
-    name: string;
-    price: number;
-    quantity: number;
-    options: {
-        size: string;
-        protein: string;
-        sides: string[];
-        addons: string[];
-        specialInstructions?: string;
-    };
-}
-
 const Cart: React.FC = () => {
-    const { cart, updateCartItem, removeCartItem } = useMenu();
+    const { cart, updateCartItem, removeFromCart, clearCart, checkout, getCart } = useCart();
+
+    useEffect(() => {
+        getCart();
+    }, [getCart]);
+
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-    const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2);
+    const totalPrice = cart.reduce((sum, item) => sum + item.total_price, 0).toFixed(2);
 
     return (
         <Sheet>
@@ -48,27 +40,24 @@ const Cart: React.FC = () => {
                     ) : (
                         <>
                             <ScrollArea className="flex-grow pr-4">
-                                {cart.map((item: CartItem, index: number) => (
-                                    <div key={index} className="flex justify-between items-start mb-6 pb-4 border-b">
+                                {cart.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-start mb-6 pb-4 border-b">
                                         <div className="flex-grow pr-4">
-                                            <h3 className="font-semibold">{item.name}</h3>
+                                            <h3 className="font-semibold">{item.product_name}</h3>
                                             <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                                            <p className="text-sm text-gray-500">Size: {item.options.size}</p>
-                                            <p className="text-sm text-gray-500">Protein: {item.options.protein}</p>
-                                            <p className="text-sm text-gray-500">Sides: {item.options.sides.join(', ')}</p>
-                                            <p className="text-sm text-gray-500">Add-ons: {item.options.addons.join(', ')}</p>
-                                            {item.options.specialInstructions && (
-                                                <p className="text-sm text-gray-500">Special Instructions: {item.options.specialInstructions}</p>
-                                            )}
+                                            <p className="text-sm text-gray-500">Base Price: ${item.base_price.toFixed(2)}</p>
+                                            {item.customizations.map((customization, index) => (
+                                                <p key={index} className="text-sm text-gray-500">
+                                                    {customization.category}: {customization.option}
+                                                    {customization.price_adjustment > 0 && ` (+$${customization.price_adjustment.toFixed(2)})`}
+                                                </p>
+                                            ))}
                                         </div>
-                                        <div className="text-right flex flex-col items-end">
-                                            <p className="font-semibold mb-2">${(item.price * item.quantity).toFixed(2)}</p>
-                                            <div className="flex items-center space-x-2 mb-2">
-                                                <Button variant="outline" size="sm" onClick={() => updateCartItem(index, Math.max(1, item.quantity - 1))}>-</Button>
-                                                <span>{item.quantity}</span>
-                                                <Button variant="outline" size="sm" onClick={() => updateCartItem(index, item.quantity + 1)}>+</Button>
-                                            </div>
-                                            <Button variant="destructive" size="sm" onClick={() => removeCartItem(index)}>Remove</Button>
+                                        <div className="flex flex-col items-end">
+                                            <p className="font-semibold">Total: ${item.total_price.toFixed(2)}</p>
+                                            <Button variant="outline" size="sm" onClick={() => removeFromCart(item.id)}>
+                                                Remove
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
@@ -79,7 +68,7 @@ const Cart: React.FC = () => {
                                     <h3 className="font-semibold">Total</h3>
                                     <p className="font-semibold">${totalPrice}</p>
                                 </div>
-                                <Button className="w-full">Checkout</Button>
+                                <Button className="w-full" onClick={checkout}>Checkout</Button>
                             </div>
                         </>
                     )}

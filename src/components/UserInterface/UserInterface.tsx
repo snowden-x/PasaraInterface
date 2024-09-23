@@ -9,7 +9,7 @@ import Search from './Search';
 export default function UserInterface(): JSX.Element {
   return (
     <MenuProvider>
-      <div className='h-screen w-screen'>
+      <div className=' h-screen w-screen'>
         <Header />
         <Search />
         <NavMenu />

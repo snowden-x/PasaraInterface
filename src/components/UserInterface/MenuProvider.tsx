@@ -1,39 +1,34 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { useEffect, createContext, useContext, useState, ReactNode } from 'react';
+import axios from 'axios';
 
 export interface MenuItemOption {
-    size: string;
-    protein: string;
-    sides: string[];
-    addons: string[];
+    [key: string]: string | string[];
 }
 
-interface MenuItem {
+export interface MenuItem {
     id: number;
     name: string;
     description: string;
     image: string;
     price: number;
     category: string;
-    defaultOptions: MenuItemOption;
-    availableOptions: {
-        sizes: string[];
-        proteins: string[];
-        sides: string[];
-        addons: string[];
-    };
+    customizations: Record<string, any>;
+    is_available: boolean;
 }
 
 interface CartItem extends MenuItem {
-    options: MenuItemOption;
+    options: Record<string, string | string[]>;
     quantity: number;
 }
 
 interface MenuContextType {
     menuItems: MenuItem[];
+    categories: string[];
     cart: CartItem[];
     addToCart: (item: MenuItem, customizations?: MenuItemOption | null) => void;
     updateCartItem: (index: number, newQuantity: number) => void;
     removeCartItem: (index: number) => void;
+    getMenuContents: (selectedCategory: string) => Promise<MenuItem[]>;
 }
 
 const MenuContext = createContext<MenuContextType | undefined>(undefined);
@@ -43,99 +38,49 @@ interface MenuProviderProps {
 }
 
 export const MenuProvider: React.FC<MenuProviderProps> = ({ children }) => {
-    const [menuItems,] = useState<MenuItem[]>([
-        {
-            id: 1,
-            name: "Poached Eggs",
-            description: "Leaves, Taprika",
-            image: "/eggs.jpg",
-            price: 8.99,
-            category: "Fast Food",
-            defaultOptions: {
-                size: "Medium",
-                protein: "Chicken",
-                sides: ["Fries"],
-                addons: []
-            },
-            availableOptions: {
-                sizes: ["Small", "Medium", "Large"],
-                proteins: ["Chicken", "Beef", "Fish", "Tofu"],
-                sides: ["Fries", "Salad", "Coleslaw", "Rice"],
-                addons: ["Cheese", "Bacon", "Avocado", "Extra sauce"]
-            }
-        },
-        {
-            id: 2,
-            name: "Burger",
-            description: "Beef patty, Lettuce, Tomato, Cheese",
-            image: "/pancake.jpg",
-            price: 10.99,
-            category: "Fast Food",
-            defaultOptions: {
-                size: "Medium",
-                protein: "Beef",
-                sides: ["Fries"],
-                addons: []
-            },
-            availableOptions: {
-                sizes: ["Small", "Medium", "Large"],
-                proteins: ["Beef", "Chicken", "Fish", "Tofu"],
-                sides: ["Fries", "Salad", "Coleslaw", "Rice"],
-                addons: ["Cheese", "Bacon", "Avocado", "Extra sauce"]
-            }
-        },
-        {
-            id: 3,
-            name: "Pizza",
-            description: "Cheese, Tomato, Mushroom",
-            image: "/tomato.jpg",
-            price: 12.99,
-            category: "Fast Food",
-            defaultOptions: {
-                size: "Medium",
-                protein: "Cheese",
-                sides: ["Fries"],
-                addons: []
-            },
-            availableOptions: {
-                sizes: ["Small", "Medium", "Large"],
-                proteins: ["Cheese", "Tomato", "Mushroom"],
-                sides: ["Fries", "Salad", "Coleslaw", "Rice"],
-                addons: ["Cheese", "Bacon", "Avocado", "Extra sauce"]
-            }
-        },
-        {
-            id: 4,
-            name: "Pasta",
-            description: "Pasta, Tomato, Cheese",
-            image: "/steakey.jpg",
-            price: 11.99,
-            category: "Fast Food",
-            defaultOptions: {
-                size: "Medium",
-                protein: "Pasta",
-                sides: ["Fries"],
-                addons: []
-            },
-            availableOptions: {
-                sizes: ["Small", "Medium", "Large"],
-                proteins: ["Pasta", "Tomato", "Cheese"],
-                sides: ["Fries", "Salad", "Coleslaw", "Rice"],
-                addons: ["Cheese", "Bacon", "Avocado", "Extra sauce"]
-            }
-        },
-                
-
-            // ... other menu items
-    ]);
-
+    const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
 
-    const addToCart = (item: MenuItem, customizations: MenuItemOption | null = null) => {
+    useEffect(() => {
+        fetchCategories();
+        fetchAllMenuItems();
+    }, []);
+
+    const fetchCategories = async () => {
+        try {
+            const result = await axios.post('http://192.168.56.1:8000/backend1/editables/', {
+                action: 'get_category',
+            });
+            setCategories(result.data.map((cat: any) => cat.name));
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+        }
+    };
+
+    const fetchAllMenuItems = async () => {
+        try {
+            const result = await axios.post('http://192.168.56.1:8000/backend1/editables/', {
+                action: 'get_all_menu_contents',
+            });
+            setMenuItems(result.data);
+        } catch (error) {
+            console.error('Error fetching all menu items:', error);
+        }
+    };
+
+    const addToCart = (item: MenuItem, customizations: Record<string, string | string[]>) => {
         const cartItem: CartItem = {
-            ...item,
-            options: customizations || item.defaultOptions,
-            quantity: 1
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: 1,
+            customizations: customizations,
+            options: customizations,
+            description: '',
+            image: '',
+            category: '',
+            is_available: false
         };
         setCart(prevCart => [...prevCart, cartItem]);
     };
@@ -150,8 +95,45 @@ export const MenuProvider: React.FC<MenuProviderProps> = ({ children }) => {
         setCart(prevCart => prevCart.filter((_, i) => i !== index));
     };
 
+    const getMenuContents = async (selectedCategory: string) => {
+        try {
+            const result = await axios.post('http://192.168.56.1:8000/backend1/editables/', {
+                action: 'get_menu_contents',
+                content: {
+                    selectedCategory,
+                },
+            });
+            return result.data;
+        } catch (error) {
+            console.error('Error fetching menu contents:', error);
+            return [];
+        }
+    };
+
     return (
-        <MenuContext.Provider value={{ menuItems, cart, addToCart, updateCartItem, removeCartItem }}>
+        <MenuContext.Provider value={{
+            menuItems,
+            categories,
+            cart,
+            addToCart: (item: MenuItem, customizations?: MenuItemOption | null) => {
+                const cartItem: CartItem = {
+                    id: item.id,
+                    name: item.name,
+                    price: item.price,
+                    quantity: 1,
+                    customizations: customizations || {},
+                    options: customizations || {},
+                    description: '',
+                    image: '',
+                    category: '',
+                    is_available: false
+                };
+                setCart(prevCart => [...prevCart, cartItem]);
+            },
+            updateCartItem,
+            removeCartItem,
+            getMenuContents
+        }}>
             {children}
         </MenuContext.Provider>
     );

@@ -11,8 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
-PasaraBackEnd
-
+/src/PasaraBackEnd/
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
